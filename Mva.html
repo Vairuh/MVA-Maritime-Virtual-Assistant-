@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MVA Navigation Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+      color: #222;
+    }
+
+    /* Top bar */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(34, 49, 75, 0.9);
+      color: #fff;
+      padding: 14px 28px;
+      backdrop-filter: blur(6px);
+    }
+    .top-bar .logo {
+      font-weight: bold;
+      font-size: 1.4rem;
+      letter-spacing: 2px;
+    }
+    .top-bar .actions span {
+      margin: 0 10px;
+      cursor: pointer;
+      transition: color 0.3s;
+    }
+    .top-bar .actions span:hover {
+      color: #ffda79;
+    }
+
+    /* Main content */
+    .main {
+      display: flex;
+      height: 70vh;
+      background: #fff;
+      border-top: 2px solid #e2e2e2;
+      border-bottom: 2px solid #e2e2e2;
+    }
+
+    /* Chat Window */
+    .chat-window {
+      flex: 1.2;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 20px;
+      border-right: 1.5px solid #ececec;
+      background: #f9fafc;
+      min-width: 280px;
+      max-width: 400px;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      margin-bottom: 12px;
+    }
+    .chat-messages p {
+      margin: 8px 0;
+      padding: 10px 14px;
+      border-radius: 12px;
+      max-width: 80%;
+    }
+    .chat-messages .ai {
+      background: #dbeafe;
+      align-self: flex-start;
+    }
+    .chat-messages .user {
+      background: #e0f7e9;
+      align-self: flex-end;
+    }
+    .chat-input {
+      display: flex;
+      gap: 8px;
+      background: #edf1f7;
+      border-radius: 16px;
+      padding: 8px 12px;
+    }
+    .chat-input input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 1rem;
+    }
+    .chat-input input:focus { outline: none; }
+    .chat-input .send {
+      cursor: pointer;
+      font-weight: bold;
+      color: #2563eb;
+      transition: 0.2s;
+    }
+    .chat-input .send:hover { color: #1e40af; }
+
+    /* Map area */
+    .map-view {
+      flex: 2;
+      position: relative;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+
+    /* Floating ETA panel */
+    .floating-panel {
+      position: absolute;
+      bottom: 18px;
+      right: 20px;
+      background: rgba(255,255,255,0.9);
+      padding: 10px 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(70,80,120,0.1);
+      font-size: 0.95rem;
+    }
+
+    /* Always-visible ship coordinates */
+    .ship-info {
+      position: absolute;
+      top: 10px;
+      right: 20px;
+      background: rgba(0,0,0,0.75);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      z-index: 1000;
+    }
+
+    /* Footer */
+    .footer-bar {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      background: #22314b;
+      color: #fff;
+      padding: 12px 0;
+      font-size: 1rem;
+    }
+    .footer-bar span {
+      min-width: 110px;
+      text-align: center;
+    }
+
+    /* Coordinate input */
+    .coord-inputs {
+      position: absolute;
+      bottom: 80px;
+      left: 20px;
+      background: rgba(255,255,255,0.95);
+      padding: 10px;
+      border-radius: 10px;
+      display: flex;
+      gap: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      z-index: 1000;
+    }
+    .coord-inputs input {
+      width: 90px;
+      padding: 5px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .coord-inputs button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .coord-inputs button:hover {
+      background: #1e40af;
+    }
+
+    @media(max-width: 900px) {
+      .main { flex-direction: column; height: auto; }
+      .chat-window { max-width: 100%; }
+      .coord-inputs { position: static; margin: 10px auto; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <div class="logo">🌊 MVA</div>
+    <div class="actions">
+      <span>Chat</span>
+      <span>Map</span>
+      <span>⚙️</span>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Chat Window -->
+    <div class="chat-window">
+      <div class="chat-messages" id="messages">
+        <p class="ai"><b>AI:</b> Hello Captain! Ask me about your route.</p>
+      </div>
+      <div class="chat-input">
+        <input type="text" id="userInput" placeholder="Type your message...">
+        <span class="send" onclick="sendMessage()">Send</span>
+      </div>
+    </div>
+
+    <!-- Map View -->
+    <div class="map-view">
+      <div id="map"></div>
+
+      <!-- Always-visible ship info -->
+      <div class="ship-info" id="shipInfo">🚢 Ship: Not placed yet</div>
+
+      <!-- Coordinate Inputs -->
+      <div class="coord-inputs">
+        <input id="lat" type="number" step="0.01" placeholder="Latitude">
+        <input id="lng" type="number" step="0.01" placeholder="Longitude">
+        <button onclick="addShip()">Place Ship</button>
+      </div>
+
+      <div class="floating-panel">⚡ ETA: 9d | Storm risk: 70%</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer-bar">
+    <span>⚡ Risk: 70%</span>
+    <span>🌡 Temp: 32°C</span>
+    <span>🌬 Wind: 25kn</span>
+    <span>⏱ ETA: 9d</span>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // Initialize map
+    var map = L.map('map').setView([10, 80], 4);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // Mock route (Singapore -> Colombo -> Mumbai)
+    var route = [
+      [1.29, 103.85],
+      [6.93, 79.85],
+      [18.96, 72.82]
+    ];
+    L.polyline(route, {color: 'blue', weight: 4}).addTo(map);
+    L.marker([1.29, 103.85]).bindPopup("Singapore").addTo(map);
+    L.marker([6.93, 79.85]).bindPopup("Colombo").addTo(map);
+    L.marker([18.96, 72.82]).bindPopup("Mumbai").addTo(map);
+
+    // Storm overlay
+    L.circle([6.5, 82], {
+      radius: 200000,
+      color: "red",
+      fillColor: "#f03",
+      fillOpacity: 0.4
+    }).bindPopup("⚠️ Storm Zone").addTo(map);
+
+    // Ship marker (dynamic input)
+    let shipMarker = null;
+    function addShip() {
+      const lat = parseFloat(document.getElementById('lat').value);
+      const lng = parseFloat(document.getElementById('lng').value);
+      const shipInfo = document.getElementById("shipInfo");
+
+      if (!isNaN(lat) && !isNaN(lng)) {
+        if (shipMarker) map.removeLayer(shipMarker);
+        shipMarker = L.marker([lat, lng], {title: "Ship"}).addTo(map)
+          .bindPopup("🚢 Ship here!").openPopup();
+
+        // Update always-visible box
+        shipInfo.textContent = `🚢 Ship: Lat ${lat.toFixed(2)}, Lng ${lng.toFixed(2)}`;
+      } else {
+        alert("Please enter valid coordinates!");
+      }
+    }
+
+    // Chat functionality
+    function sendMessage() {
+      let input = document.getElementById("userInput");
+      let messages = document.getElementById("messages");
+
+      if (input.value.trim() !== "") {
+        let userMsg = document.createElement("p");
+        userMsg.className = "user";
+        userMsg.innerHTML = "<b>You:</b> " + input.value;
+        messages.appendChild(userMsg);
+
+        // AI Response (mock)
+        let aiMsg = document.createElement("p");
+        aiMsg.className = "ai";
+        aiMsg.innerHTML = `<b>AI:</b> I'm processing "${input.value}"...`;
+        setTimeout(() => { 
+          messages.appendChild(aiMsg); 
+          messages.scrollTop = messages.scrollHeight; 
+        }, 600);
+
+        input.value = "";
+        messages.scrollTop = messages.scrollHeight;
+      }
+    }
+  </script>
+</body>
+</html>
